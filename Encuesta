@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encuesta estudiantil</title>
+<style>
+  :root { --fondo:#f2f5f9; --tarjeta:#ffffff; --texto:#1c2430; --azul:#1f4e8c; --borde:#c9d3df; --ok:#1d7a46; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--fondo); color:var(--texto); padding:24px 16px; }
+  main { max-width:640px; margin:0 auto; }
+  h1 { font-size:1.8rem; margin:0 0 4px; }
+  p.sub { margin:0 0 20px; color:#51607a; }
+  form, .panel { background:var(--tarjeta); border:1px solid var(--borde); border-radius:10px; padding:20px; margin-bottom:20px; }
+  label.campo { display:block; font-weight:bold; margin:16px 0 6px; }
+  input[type=text], input[type=number], input[type=email], select, textarea {
+    width:100%; padding:10px; font:inherit; border:1px solid var(--borde); border-radius:6px; background:#fff;
+  }
+  fieldset { border:none; padding:0; margin:16px 0 0; }
+  legend { font-weight:bold; margin-bottom:6px; }
+  .opcion { display:block; padding:4px 0; }
+  button { font:inherit; padding:10px 18px; border:none; border-radius:6px; background:var(--azul); color:#fff; cursor:pointer; margin-top:20px; margin-right:8px; }
+  button.sec { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid #f0a000; outline-offset:2px; }
+  .error { color:#b3261e; font-size:.9rem; margin-top:4px; min-height:1em; }
+  #mensaje { color:var(--ok); font-weight:bold; margin-top:12px; min-height:1.2em; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th, td { border-bottom:1px solid var(--borde); padding:6px; text-align:left; }
+  .tabla-scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Encuesta estudiantil</h1>
+  <p class="sub">Responde las preguntas. Tus respuestas se guardan y se pueden descargar en Excel (CSV).</p>
+
+  <!-- FORMULARIO -->
+  <form id="formulario" novalidate>
+    <label class="campo" for="nombre">Nombre completo</label>
+    <input type="text" id="nombre" autocomplete="name">
+    <div class="error" id="error-nombre"></div>
+
+    <label class="campo" for="edad">Edad</label>
+    <input type="number" id="edad" min="10" max="99">
+    <div class="error" id="error-edad"></div>
+
+    <label class="campo" for="correo">Correo electrónico</label>
+    <input type="email" id="correo" autocomplete="email">
+    <div class="error" id="error-correo"></div>
+
+    <label class="campo" for="programa">Programa o carrera</label>
+    <select id="programa">
+      <option value="">Selecciona una opción</option>
+      <option>Ingeniería de Sistemas</option>
+      <option>Ingeniería Industrial</option>
+      <option>Administración</option>
+      <option>Otro</option>
+    </select>
+    <div class="error" id="error-programa"></div>
+
+    <fieldset>
+      <legend>¿Qué tan satisfecho estás con las clases?</legend>
+      <label class="opcion"><input type="radio" name="satisfaccion" value="Muy satisfecho"> Muy satisfecho</label>
+      <label class="opcion"><input type="radio" name="satisfaccion" value="Satisfecho"> Satisfecho</label>
+      <label class="opcion"><input type="radio" name="satisfaccion" value="Neutral"> Neutral</label>
+      <label class="opcion"><input type="radio" name="satisfaccion" value="Insatisfecho"> Insatisfecho</label>
+    </fieldset>
+    <div class="error" id="error-satisfaccion"></div>
+
+    <fieldset>
+      <legend>¿Qué lenguajes has usado? (puedes marcar varios)</legend>
+      <label class="opcion"><input type="checkbox" name="lenguajes" value="Java"> Java</label>
+      <label class="opcion"><input type="checkbox" name="lenguajes" value="Python"> Python</label>
+      <label class="opcion"><input type="checkbox" name="lenguajes" value="JavaScript"> JavaScript</label>
+      <label class="opcion"><input type="checkbox" name="lenguajes" value="C++"> C++</label>
+    </fieldset>
+
+    <label class="campo" for="comentario">Comentario (opcional)</label>
+    <textarea id="comentario" rows="3"></textarea>
+
+    <button type="submit">Enviar encuesta</button>
+    <div id="mensaje" role="status"></div>
+  </form>
+
+  <!-- PANEL DE RESULTADOS -->
+  <section class="panel">
+    <strong>Respuestas guardadas: <span id="total">0</span></strong><br>
+    <button type="button" id="btnDescargar">Descargar Excel (CSV)</button>
+    <button type="button" class="sec" id="btnBorrar">Borrar todo</button>
+    <div class="tabla-scroll">
+      <table>
+        <thead><tr><th>Nombre</th><th>Edad</th><th>Programa</th><th>Satisfacción</th></tr></thead>
+        <tbody id="cuerpoTabla"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ==========================================================
+   ENCUESTA – lógica
+   1. Validar los datos del formulario
+   2. Guardarlos en localStorage (queda en el navegador)
+   3. Mostrarlos en la tabla
+   4. Exportarlos a un archivo CSV que abre Excel
+   ========================================================== */
+
+const CLAVE = "respuestasEncuesta";   // nombre con el que se guarda en el navegador
+
+// Leer las respuestas guardadas (si no hay, devuelve lista vacía)
+function leerRespuestas() {
+  const texto = localStorage.getItem(CLAVE);
+  return texto ? JSON.parse(texto) : [];
+}
+
+// Guardar la lista completa de respuestas
+function guardarRespuestas(lista) {
+  localStorage.setItem(CLAVE, JSON.stringify(lista));
+}
+
+// Poner un mensaje de error debajo de un campo
+function mostrarError(id, texto) {
+  document.getElementById("error-" + id).textContent = texto;
+}
+
+// Validar el formulario; devuelve true si todo está bien
+function validar() {
+  let ok = true;
+  ["nombre", "edad", "correo", "programa", "satisfaccion"].forEach(c => mostrarError(c, ""));
+
+  const nombre = document.getElementById("nombre").value.trim();
+  const edad = document.getElementById("edad").value;
+  const correo = document.getElementById("correo").value.trim();
+  const programa = document.getElementById("programa").value;
+  const satisfaccion = document.querySelector('input[name="satisfaccion"]:checked');
+
+  if (nombre.length < 3) { mostrarError("nombre", "Escribe tu nombre completo."); ok = false; }
+  if (!edad || edad < 10 || edad > 99) { mostrarError("edad", "Escribe una edad entre 10 y 99."); ok = false; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) { mostrarError("correo", "Escribe un correo válido."); ok = false; }
+  if (programa === "") { mostrarError("programa", "Selecciona un programa."); ok = false; }
+  if (!satisfaccion) { mostrarError("satisfaccion", "Elige una opción."); ok = false; }
+  return ok;
+}
+
+// Dibujar la tabla con las respuestas
+function actualizarTabla() {
+  const lista = leerRespuestas();
+  document.getElementById("total").textContent = lista.length;
+  const cuerpo = document.getElementById("cuerpoTabla");
+  cuerpo.innerHTML = "";
+  lista.forEach(r => {
+    const fila = document.createElement("tr");
+    [r.nombre, r.edad, r.programa, r.satisfaccion].forEach(valor => {
+      const celda = document.createElement("td");
+      celda.textContent = valor;          // textContent evita meter HTML malicioso
+      fila.appendChild(celda);
+    });
+    cuerpo.appendChild(fila);
+  });
+}
+
+// Al enviar el formulario
+document.getElementById("formulario").addEventListener("submit", function (e) {
+  e.preventDefault();                      // evita que la página se recargue
+  if (!validar()) return;
+
+  const lenguajes = Array.from(document.querySelectorAll('input[name="lenguajes"]:checked'))
+                         .map(c => c.value).join(" / ");
+
+  const respuesta = {
+    fecha: new Date().toLocaleString("es-CO"),
+    nombre: document.getElementById("nombre").value.trim(),
+    edad: document.getElementById("edad").value,
+    correo: document.getElementById("correo").value.trim(),
+    programa: document.getElementById("programa").value,
+    satisfaccion: document.querySelector('input[name="satisfaccion"]:checked').value,
+    lenguajes: lenguajes,
+    comentario: document.getElementById("comentario").value.trim()
+  };
+
+  const lista = leerRespuestas();
+  lista.push(respuesta);
+  guardarRespuestas(lista);
+
+  this.reset();
+  actualizarTabla();
+  document.getElementById("mensaje").textContent = "¡Respuesta guardada!";
+});
+
+// Convierte un valor a texto seguro para CSV (comillas dobles)
+function celdaCSV(valor) {
+  return '"' + String(valor).replace(/"/g, '""') + '"';
+}
+
+// Descargar todas las respuestas como CSV
+document.getElementById("btnDescargar").addEventListener("click", function () {
+  const lista = leerRespuestas();
+  if (lista.length === 0) { alert("Todavía no hay respuestas para descargar."); return; }
+
+  const columnas = ["fecha", "nombre", "edad", "correo", "programa", "satisfaccion", "lenguajes", "comentario"];
+  const separador = ";";                    // Excel en español usa punto y coma
+  const filas = [columnas.map(celdaCSV).join(separador)];
+  lista.forEach(r => filas.push(columnas.map(c => celdaCSV(r[c])).join(separador)));
+
+  // "\ufeff" al inicio hace que Excel muestre bien las tildes y la ñ
+  const contenido = "\ufeff" + filas.join("\r\n");
+  const blob = new Blob([contenido], { type: "text/csv;charset=utf-8;" });
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(blob);
+  enlace.download = "respuestas_encuesta.csv";
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+});
+
+// Borrar todas las respuestas (pide confirmación)
+document.getElementById("btnBorrar").addEventListener("click", function () {
+  if (confirm("¿Seguro que quieres borrar todas las respuestas?")) {
+    localStorage.removeItem(CLAVE);
+    actualizarTabla();
+    document.getElementById("mensaje").textContent = "";
+  }
+});
+
+actualizarTabla();   // al abrir la página, mostrar lo que ya estaba guardado
+</script>
+</body>
+</html>
